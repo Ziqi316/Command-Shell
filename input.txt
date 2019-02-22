@@ -1,0 +1,4 @@
+ls
+status
+view-grades
+exit

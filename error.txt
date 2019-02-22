@@ -1,0 +1,2 @@
+/bin/ls: cannot open directory '/root': Permission denied
+enied

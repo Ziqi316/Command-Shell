@@ -1,0 +1,3 @@
+Grade: 104.1
+Comments:
+Your redirection into the input stream does not work, even though you have testcases for it. If you think there's a mistake, please contact Drew/Genevieve/TAs

@@ -1,0 +1,410 @@
+Test Cases
+All the commands below are already tested and valgrind is all clean.
+It is also clean when exiting failure since I free vector.
+Most of the output is the same as the Unix bash.
+-----------------------------------------------------------------------------
+parse command line:
+The result shown is the separated command line argument 
+(1) (nothing) or (space)(space)(space)(enter)
+    result: display the shell again (wait for next command)
+    correct because it receives no commands.
+(2) ./myProgram a b c
+    result: "./myProgram","a","b","c"
+    correct because it is splited by space
+(3) ./myProgram    a   b    c     (enter)(a lot of whitespace after c)
+    result: "./myProgram","a","b","c"
+    correct because we omit the space between arguments
+(4)   ./myProgram a\b c\ \ d    a\     \n(a lot of whitespace )
+    result:"./myProgram","a\b","c  d","a "
+    correct because "\" escape one whitespace but a\b will not be ab because it is not required
+(5) \ ./myProgram \(space)(space)\n
+    result:" ./myProgram"," "
+    correct because \(space) is a whitespace as an argument of command
+    
+-----------------------------------------------------------------------------
+command with/without slash
+(6) ls			(or any other command in ECE551PATH)
+    result:list all the file in the current directory.
+    	       Program exited with status 0
+    correct because it does not have slash so it searches ECE551PATH to find full path name (if ECE551PATH is not changed, command will be /bin/ls and then execve)
+(7) abd		  	 (any other command not in ECE551PATH)
+    output:command abd not found
+    correct because abd is not a filename in ECE551PATH environment path
+(8) /ds 	       	  (or any other command contain /)
+    output:execve: No such file or directory
+           Program exited with status 1
+    correct because it has slash do it will not search ECE551PATH and directly execve and it cannot execute
+(9) ./myProgram	     	   (relative path but in current directory)
+    result: execute the program directly without searching ECE551PATH
+(10) .	    	    	   (or ..)
+    output:command . not found
+    correct because . may exist in the ECE551PATH as filename but we neglect it when searching
+
+-----------------------------------------------------------------------------
+execve result:
+(11) ./123		(123 cannot be found in current directory)
+    output:execve: No such file or directory
+           Program exited with status 1
+    correct because the file does not exist
+(12) ./myShell.cpp        (myShell.cpp is a file found in directory)
+    output:execve: Permission denied
+           Program exited with status 1
+    correct because it is not executable
+(13) /bin/ls
+    result:list the file in current directory
+           Program exit with status 0
+(14) /bin/ls /home/zp33 /home/zp33/ece551
+    result:list the file in the directory
+           Program exit with status 0
+    correct because system call execve return successfully.(status 0)
+(15) ls qwer
+    output:/bin/ls: cannot access 'qwer': No such file or directory
+           Program exited with status 2
+    correct because it cannot find the file so it is status 2
+(16) (some broken program file)
+    result: shell will report execution result including its exit status or which signal kills the program
+    correct because parent process wait for child process exit and report its status and signal.
+
+-----------------------------------------------------------------------------
+build in commands
+-----------------------------------------------------------------------------
+(17) exit or EOF (control-d):
+   result: Shell will exit
+-----------------------------------------------------------------------------
+cd:
+
+(18) cd /home/zp33/ece551
+    result:it will enter /home/zp33/ece551
+(19) cd ..
+    result: return back 
+(20) cd 123
+    output:cd: No such file or directory
+    correct because 123 does not exist
+(21) cd ece551  (not in /home/zp33--means it is a relative path)
+    output:cd: No such file or directory
+    correct because cd only enter a fullpath and a relative path in current direcory
+(22) cd	       (only cd) 
+    result: enter to /home/zp33 
+    correct because it is the same as bash. I set it by getenv("HOME").
+(23) cd /home/(other's netid)    
+    output:cd: Permission denied
+    correct bucause program have no root to enter these files.
+(24) cd /home/zp33  /home/zp33/ece551
+    output:cd: too many arguments!
+    correct because cd command only accept one or none argument.
+    
+-----------------------------------------------------------------------------
+set:
+(25)  set 12% 
+     output:variables should be numbers, letters and underscores!
+     correct because variable name contain invalid character %
+(26)  set
+      output:Should have one argument!
+      correct because no variable name.
+(27)  set var  (only 2 argument)
+      result:var=     (empty)
+      correct because if there is no value, the variable is empty.Whether it has space after var, result will not change.
+(28)  set c 12
+      set c 123
+      result:c=123
+      correct because set it again will cover its original value
+(29)  set e 456
+      result:e=456
+(30)  set b 45\ b
+      b=45\ b
+      correct because slash will not escape space when evaluating 
+(31)  set b 45 6
+      b=45 6
+      correct because value allow whitespace so the whole remaining line will be value.
+      If it includes a lot of whitespace after, echo $b-, output:45 6    -
+(32)  set $a b
+      output:variable name should be numbers, letters and underscores
+      correct because we will not replace the variable in "set" command. $ will still be viewed as invalid character.
+(33)  set a      123
+      a=     123
+      correct because the value of the variable will be recorded from the character after the first whitespace, even if it is still a whitespace
+(34)  set d         (a lot of whitespace after d)
+      d=
+      correct because d do not have whitespace. if we echo $d-, output:-
+(35)  set x set
+      $x x inc
+      result:x=inc
+      correct because "set" command is first replaced and evaluate x as set.
+
+      NOTICE that only "set" variable name cannot contain $. Other commands will evaluate variable first in any argument.
+
+-----------------------------------------------------------------------------
+evaluate variable (base on the variable we set before)
+c=123
+e=456
+b=45\ 6
+(36)  echo $s     //a variable not set
+      output:
+      correct because s is not set. We cannot find s in the varMap, so $s is empty (same as bash)
+(37)  echo $
+      output:
+      no variable to evaluate, return empty(same as bash)
+(38)  /bin$$/ls
+      result: list all the file
+      correct because $$(followed by a /)will be evaluated as empty. It is actually /bin/ls
+(39)  /bin/$$ls
+      result:Command not l found
+      correct because $ls will evaluate and actually is /bin/
+(40)  echo $c
+      output:123
+(41)  echo 12$c-#$$e!2
+      output:12123-#456!2
+      correct because it will evaluate $c, $ and $e and other character keeps unchanged and echo $ is actually empty
+(42)  echo 1$cd-
+      output:1-
+      correct because though we have set c but d is not invalid so program view cd as a variable to search for value and find nothing.
+(43)  set c 123
+      set cd 234
+      echo $cd-$cs
+      output:234-
+      correct because it first evaluate cd and then evaluate cs
+(44)  echo -$c-$b_#
+      output:-123-#
+      correct because _ is valid, program consider b_ as a variable but cannot find it, so it will replace with empty.
+(45)  echo $a  $b
+      output:     123 45 6
+      correct because $a $b is already splited before evaluting them
+(46)  set cd cd
+      set netid zp33
+      $cd /home/$netid/ece551
+      output:it will change directory to /home/zp33/ece551
+      correct because all variables will be evaluated and replaced first and then execute command.
+(47)  set C notc
+      echo $C
+      output: notc
+      correct because var name is case-sensitive
+(48)  set abc_ x
+      set def_ $abc_
+      echo $def_
+      output:x
+      because the second $abc_ is evaluated as x and set def_ to x. The program recursively evaluate each variable until no $ is found. Set more variable's value as $ will always work.
+(49)  set a1 b
+      set $a1 c
+      output:variable name should be numbers, letter and underscores!
+      correct because the variable name will not be evaluated and replaced
+(50)  set cd_ cd
+      set cd__ $cd_
+      $cd__ /home/zp33
+      result:enter the directory
+      correct because $cd__=$cd_=cd
+
+-----------------------------------------------------------------------------
+export and environment
+rule: If the user changed ECE551PATH, it will affect which directory it search the full path
+
+(51)  export nonexist
+      result:do nothing
+      correct because no value in the map and will not remind user like a real bash
+(52)  export
+      output:Should have one argument!
+      correct because export must have one variable name
+(53)  export a 123
+      output:Should have one argument!
+      correct because only export one variable
+      the number of argument can only be 2
+(54)  set a #$
+      export $a
+      output:variables should be numbers, letters and underscores!
+      correct because in "export"  command, variable can be replaced so $a is actually #$ which is invalid variable name.
+(55)  set a b
+      set b 2
+      export $a
+      result:b=2 in environment
+      correct because $a is evaluated as b
+(56)  export  somethingExist
+      result:it is put into environ (can be tested by env)
+(57)  set home /home
+     result:home will not in environment
+     correct because we do not export it
+(58)  export home
+     result:env:home=/home
+(59)  set home 123
+     result: in env:home=/home
+    	    in varMap: home=123
+     correct because with export, its value changed in varMap but not in environment
+(60)  export home
+     result: in env:home=123 (changed)
+(61) env
+     result:(some other environment variable)
+           ECE551PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+     correct because we first initialize ECE551PATH with PATH
+(62) set ECE551PATH /home/zp33/ece551
+     result:env:ECE551PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+     correct because we do not export  ECE551PATH
+(63) export ECE551PATH
+     env:ECE551PATH=/home/zp33/ece551
+(64) ls
+     output:command ls not found.
+     correct because the path to search the full name is changed and /home/zp33/ece551 do not have a file named "ls"
+(65) set ECE551PATH 123
+     export ECE551PATH
+     ls
+     output:Cannot open directory!
+           Command ls not found
+     correct because to search ls,  we have to go the 123 directory and it does not exist
+(66) set ECE551PATH /home/zp33/ece551:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games::@#
+     export ECE551PATH
+     result:can run all the program I wrote this semester and the command in PATH without full name. If it cannot found in this, it will go to "" and @# and say Cannot open the directory and command not found. (I have tested spliting environment with ":" by printing the environment vector)
+(67) set ECE551PATH /home/zp33
+     export ECE551PATH
+     set ANOTHERPATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+     export ANOTHERPATH
+     ls
+     output:command ls not found
+     correct because only if users change ECE551PATH, will the searching directory change. Shell will not search other directory in other environment variable.
+(68) set ECE551PATH
+     export ECE551PATH
+     env
+     result:ECE551PATH=
+     ls
+     Cannot open the directory!
+     correct because ECE551PATH is empty and it cannot enter a empty directory.
+-----------------------------------------------------------------------------
+inc:
+
+(69) inc noneExist
+     result:noneExist=1 in varMap
+     correct because if it does not exist, shell treats it as 0
+(70) inc
+     output:Should have one argument!
+     correct because user need to specify the increased variable name
+(71) set b 2
+     set a b
+     inc $a
+     echo $b
+     output:3
+     correct because variable in "inc" command can be replaced and $a is actually b
+(72) inc 7
+     output:1
+     correct because it will not be 8 since 7 is variable and is not set
+(73) set a 2-3
+     inc a
+     result:a=1
+     correct because 2-3 cannot be evaluated as numbers so it is string and inc a will be 1
+(74) inc a 123
+     output:Should have one argument!
+     correct because inc command only increase one variable
+     the number of argument can only be 2
+(75) set a b
+     set b 2	
+     inc $a
+     result:b=3
+     correct because $a is b. variable is first evaluated here
+(76) set a 123
+     inc a
+     result:a=124
+(77) inc a
+     result:a=125
+     correct because a is an integer.
+(78) set a -2.1  (float or other string that not integer)
+     inc a
+     result:a=1
+     correct because a is not considered as an integer so will not increase 
+(79) set a -3
+     inc a
+     result:a=-2
+     correct because negative integer is also allowed
+(80) set a -
+     inc a
+     result a=1
+     correct because only a negative sign will be considered as string
+(81) set a (large data which exceed the bound of long int)
+     inc a
+     result:a=1
+     correct because shell considers data larger than long max as string
+    
+-----------------------------------------------------------------------------
+Special cases:
+(82)  ./myShell
+     output:run a new shell in the current shell, and we can see the child become a parent and fork a new child by checking pid. The new shell shares the same environment as the parents. When it exit, it returns to the previous shell.
+ 
+-----------------------------------------------------------------------------
+Redirection:
+intput.txt:
+ls
+/ls
+status
+view-grade
+exit
+(83)  ./myShell <input.txt
+     result:it will run these commands in a new myShell and finally exit the new shell
+     correct because it will read from the input as input these commands in the new shell's stdin as commands and finally exit.
+(84)  ./myShell < input.txt
+     result: the same as above like a real bash
+     correct because we allow < filename can be both splited by whitespace or closely put together
+(85) ls /home/zp33 >output.txt
+     output:Program exited with status 0
+     cat output.txt
+     output:ece551
+     correct because the output of ls (stdout) is written into the output.txt file
+(86) ls /home/zp33 >output.txt 2>error.txt
+     output:Program exited with status 0
+     cat error.txt
+     output:(nothing)
+     correct because no error happen but only output
+(87) ls /root >output.txt 2> error.txt
+     output:Program exited with status 2
+     cat output.txt
+     output:(previous content)
+     cat error.txt
+     output:/bin/ls: cannot open directory '/root': Permission denied
+     correct because error happends and no output.
+(88) ls 123 > or ls 123 < or ls 2>    (> not followed by argument)
+     output:syntax error near unexpected toekn 'newline
+            Program exited with status 1
+     correct because < > or 2> need to be followed by argument and it is the same as bash
+(89) ls >123 	or ls 2>123 (123 not exist)
+     result:create a file named 123 and write the program's output or error in into the file
+     correct because when open the file, we set it as "creat if not exist", and output will be written into the new file.
+(90) ls <234     (234 no exist)
+     output:<: No such file or firectory
+            Program exited with status1
+     correct because in inputdirection, if the file does not exist, we will not create it but give an error message.
+(91) ls > >
+     result: create a file named '>' and put the output into the file
+     correct because shell view second > as a new file name.
+(92) ls < <
+     output:<: No such file or firectory
+     correct because program consider the second < as a filename and cannot find it
+
+(93) ./myShell <input.txt >output.txt 2>error.txt
+     result: create a new shell, execute the command in input.txt and write its stdout result in output.txt and all the error information in error.txt
+     correct because it combines all the direction together and work well.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
